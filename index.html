@@ -86,6 +86,14 @@
     background: none; border: none; cursor: pointer;
     font-size: 20px; color: var(--muted);
   }
+  .sair {
+    position: absolute; left: 12px; top: 15px;
+    background: none; border: 1px solid var(--line); border-radius: 7px;
+    padding: 4px 10px; cursor: pointer;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .sair:active { transform: translateY(1px); }
   .board-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px; }
   .board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 6px; }
   .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
@@ -196,6 +204,7 @@
   <header>
     <h1>TER<b>MO</b></h1>
     <p id="subtitle">palavra do dia, sua vez</p>
+    <button class="sair" id="sairBtn" title="Encerrar e salvar o recorde">Sair</button>
     <button class="reset" id="reset" title="Nova palavra">↻</button>
   </header>
 
@@ -625,6 +634,15 @@ window.addEventListener("keydown",e=>{
 document.getElementById("reset").onclick=()=>{
   if(!jogador){ mostrarLogin(); return; }
   newGame(); toast("Nova palavra!");
+};
+
+// Sair: encerra a sequência atual e mostra o placar (o recorde já foi salvo a cada acerto)
+document.getElementById("sairBtn").onclick=()=>{
+  if(!jogador) return;
+  if(document.getElementById("overlay").classList.contains("show")) return;
+  if(document.getElementById("loginOverlay").classList.contains("show")) return;
+  gameOver = true;
+  endRun(streak, score);
 };
 
 // Inicialização: carrega as palavras, tenta a sessão salva e pede login se preciso
