@@ -249,18 +249,20 @@
 <script src="config.js"></script>
 <script>
 // ---- Banco de palavras (5 letras, sem acento; comparação ignora acentos) ----
-// VALIDAS = todas as palavras aceitas como chute (de palavras.txt).
-// WORDS   = respostas sorteáveis = todas as válidas, menos os palavrões abaixo.
+// WORDS   = respostas sorteáveis (respostas.txt: comuns e adivinháveis).
+// VALIDAS = todas as palavras aceitas como chute (palavras.txt) + as respostas.
 let VALIDAS = new Set();
 let WORDS = [];
-const PALAVROES = new Set(["MERDA","PORRA","FODER","BUNDA","CUZAO","VADIA","PUTAS","PUTAO","CAGAR","TESAO","PENIS","CONAS","TROXA","XINGA"]);
 
 async function carregarBancos(){
-  const r = await fetch("palavras.txt", { cache: "no-store" });
-  if(!r.ok) throw new Error("Falha ao carregar palavras.txt (" + r.status + ")");
-  const lista = (await r.text()).split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s.length === 5);
-  VALIDAS = new Set(lista);
-  WORDS = lista.filter(w => !PALAVROES.has(w));
+  const pega = async (arq) => {
+    const r = await fetch(arq, { cache: "no-store" });
+    if(!r.ok) throw new Error("Falha ao carregar " + arq + " (" + r.status + ")");
+    return (await r.text()).split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s.length === 5);
+  };
+  const [respostas, validacao] = await Promise.all([ pega("respostas.txt"), pega("palavras.txt") ]);
+  WORDS = [...new Set(respostas)];
+  VALIDAS = new Set([...validacao, ...respostas]);
 }
 
 const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
