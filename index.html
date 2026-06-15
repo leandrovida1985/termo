@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Termo</title>
+<style>
+  :root {
+    --bg: #faf6ef;
+    --ink: #1a1714;
+    --muted: #8a8178;
+    --line: #e2dacd;
+    --empty: #ffffff;
+    --tile-border: #d6cdbf;
+    --certo: #5b8a4a;     /* verde */
+    --posicao: #d8a13a;   /* amarelo/âmbar */
+    --ausente: #b3a99a;   /* cinza-areia */
+    --key: #ece5da;
+    --key-ink: #1a1714;
+    --accent: #c2492f;
+    --shadow: rgba(40,32,24,.12);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex; flex-direction: column;
+    max-width: 480px; margin: 0 auto;
+    height: 100dvh;
+  }
+  header {
+    text-align: center;
+    padding: 12px 0 6px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 30px;
+    letter-spacing: .42em;
+    text-indent: .42em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  header h1 b { color: var(--accent); }
+  header p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    letter-spacing: .25em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .scorebar {
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--line);
+    background: #fffdf9;
+  }
+  .stat { text-align: center; flex: 1; position: relative; }
+  .stat + .stat::before {
+    content: ""; position: absolute; left: 0; top: 14%; height: 72%;
+    border-left: 1px solid var(--line);
+  }
+  .stat .num {
+    font-size: 22px; font-weight: 800; line-height: 1;
+    color: var(--ink);
+  }
+  .stat.streak .num { color: var(--accent); }
+  .stat .num.bump { animation: bump .4s ease; }
+  @keyframes bump { 0%{transform:scale(1)} 40%{transform:scale(1.35)} 100%{transform:scale(1)} }
+  .stat .lbl {
+    display: block; margin-top: 3px;
+    font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stat .num .fire { font-size: 16px; }
+  .reset {
+    position: absolute; right: 12px; top: 14px;
+    background: none; border: none; cursor: pointer;
+    font-size: 20px; color: var(--muted);
+  }
+  .board-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px; }
+  .board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 6px; }
+  .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .tile {
+    width: 58px; height: 58px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; text-transform: uppercase;
+    background: var(--empty);
+    border: 2px solid var(--tile-border);
+    border-radius: 8px;
+    color: var(--ink);
+    transition: transform .12s, background .25s, border-color .25s, color .25s;
+  }
+  .tile.filled { border-color: var(--muted); animation: pop .12s ease; }
+  @keyframes pop { 0%{transform:scale(.9)} 100%{transform:scale(1)} }
+  .tile.flip { animation: flip .5s ease forwards; }
+  @keyframes flip {
+    0% { transform: rotateX(0); }
+    50% { transform: rotateX(90deg); }
+    100% { transform: rotateX(0); }
+  }
+  .tile.certo   { background: var(--certo);   border-color: var(--certo);   color:#fff; }
+  .tile.posicao { background: var(--posicao); border-color: var(--posicao); color:#fff; }
+  .tile.ausente { background: var(--ausente); border-color: var(--ausente); color:#fff; }
+  .row.shake { animation: shake .4s; }
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-6px)} 40%{transform:translateX(6px)}
+    60%{transform:translateX(-4px)} 80%{transform:translateX(4px)}
+  }
+  .keyboard { padding: 6px 4px 14px; }
+  .krow { display: flex; justify-content: center; gap: 5px; margin-bottom: 6px; }
+  .key {
+    flex: 1; max-width: 38px; height: 50px;
+    border: none; border-radius: 6px;
+    background: var(--key); color: var(--key-ink);
+    font-size: 15px; font-weight: 700; text-transform: uppercase;
+    cursor: pointer; box-shadow: 0 1px 2px var(--shadow);
+    transition: background .25s, color .25s, transform .05s;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .key:active { transform: translateY(1px); }
+  .key.wide { max-width: 62px; font-size: 12px; }
+  .key.certo   { background: var(--certo);   color:#fff; }
+  .key.posicao { background: var(--posicao); color:#fff; }
+  .key.ausente { background: var(--ausente); color:#fff; }
+  .toast {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg);
+    padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10;
+    box-shadow: 0 4px 14px var(--shadow);
+  }
+  .toast.show { opacity: 1; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(26,23,20,.55);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--bg); border-radius: 16px;
+    width: 100%; max-width: 360px;
+    padding: 22px 20px; box-shadow: 0 14px 40px rgba(0,0,0,.35);
+    animation: rise .3s ease;
+  }
+  @keyframes rise { 0%{transform:translateY(20px);opacity:0} 100%{transform:translateY(0);opacity:1} }
+  .modal h2 { margin: 0 0 2px; font-size: 22px; text-align: center; letter-spacing: .04em; }
+  .modal .sub { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .modal .big { color: var(--accent); font-weight: 800; }
+  .namerow { display: flex; gap: 8px; margin-bottom: 16px; }
+  .namerow input {
+    flex: 1; border: 2px solid var(--tile-border); border-radius: 8px;
+    padding: 12px; font-size: 16px; background: #fff; color: var(--ink);
+    text-transform: uppercase;
+  }
+  .namerow input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    border: none; border-radius: 8px; padding: 12px 16px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    background: var(--accent); color: #fff;
+  }
+  .btn.ghost { background: var(--key); color: var(--ink); width: 100%; margin-top: 4px; }
+  .rank { list-style: none; margin: 0 0 14px; padding: 0; }
+  .rank li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 15px;
+  }
+  .rank li:last-child { border-bottom: none; }
+  .rank .pos { width: 22px; font-weight: 800; color: var(--muted); text-align: center; }
+  .rank .who { flex: 1; font-weight: 600; text-transform: uppercase; }
+  .rank .pts { font-weight: 800; }
+  .rank li.me { background: #fff6ee; border-radius: 8px; }
+  .rank .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
+  @media (max-height: 700px) {
+    .tile { width: 50px; height: 50px; font-size: 24px; }
+    .key { height: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tile.flip, .row.shake, .tile.filled { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>TER<b>MO</b></h1>
+    <p>palavra do dia, sua vez</p>
+    <button class="reset" id="reset" title="Nova palavra">↻</button>
+  </header>
+
+  <div class="scorebar">
+    <div class="stat streak">
+      <span class="num" id="streak">0</span>
+      <span class="lbl">Sequência</span>
+    </div>
+    <div class="stat">
+      <span class="num" id="best">0</span>
+      <span class="lbl">Recorde</span>
+    </div>
+    <div class="stat">
+      <span class="num" id="score">0</span>
+      <span class="lbl">Pontos</span>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="keyboard" id="keyboard"></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2 id="modalTitle">Fim da sequência</h2>
+      <p class="sub" id="modalSub"></p>
+      <div id="nameStage">
+        <div class="namerow">
+          <input id="nameInput" maxlength="12" placeholder="Seu nome" autocomplete="off">
+          <button class="btn" id="saveScore">Salvar</button>
+        </div>
+      </div>
+      <ul class="rank" id="rankList"></ul>
+      <button class="btn ghost" id="playAgain">Jogar de novo</button>
+      <button class="btn ghost" id="saveExit">Salvar e sair</button>
+    </div>
+  </div>
+
+<script src="config.js"></script>
+<script>
+// ---- Banco de palavras (5 letras, sem repetir acento; comparação ignora acentos) ----
+// Bancos carregados de arquivos externos (respostas.txt e palavras.txt).
+// WORDS = respostas sorteáveis | VALIDAS = palavras aceitas como chute.
+let WORDS = [];
+let VALIDAS = new Set();
+
+async function carregarBancos(){
+  const pega = async (arq) => {
+    const r = await fetch(arq, { cache: "no-store" });
+    if(!r.ok) throw new Error("Falha ao carregar " + arq + " (" + r.status + ")");
+    const txt = await r.text();
+    return txt.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s.length === 5);
+  };
+  const [respostas, validacao] = await Promise.all([ pega("respostas.txt"), pega("palavras.txt") ]);
+  WORDS = [...new Set(respostas)];
+  VALIDAS = new Set([...validacao, ...WORDS]);
+}
+
+const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
+
+let answer, attempts, current, gameOver;
+let streak = 0, best = 0, score = 0;
+
+// Pontos-base por tentativa do acerto (índice 0 = 1ª tentativa)
+const PONTOS_TENTATIVA = [100, 80, 60, 40, 25, 10];
+
+function updateScorebar(bump){
+  const s = document.getElementById("streak");
+  s.innerHTML = streak + (streak >= 3 ? ' <span class="fire">🔥</span>' : '');
+  document.getElementById("best").textContent = best;
+  document.getElementById("score").textContent = score;
+  if(bump){
+    [s, document.getElementById("score")].forEach(el=>{
+      el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
+    });
+  }
+}
+
+function newGame() {
+  answer = norm(WORDS[Math.floor(Math.random()*WORDS.length)]);
+  attempts = [];
+  current = "";
+  gameOver = false;
+  buildBoard();
+  buildKeyboard();
+  updateScorebar(false);
+}
+
+function buildBoard() {
+  const b = document.getElementById("board");
+  b.innerHTML = "";
+  for (let r=0;r<6;r++){
+    const row=document.createElement("div"); row.className="row"; row.id="row"+r;
+    for(let c=0;c<5;c++){
+      const t=document.createElement("div"); t.className="tile"; t.id=`t${r}-${c}`;
+      row.appendChild(t);
+    }
+    b.appendChild(row);
+  }
+}
+
+const KEYS=[["Q","W","E","R","T","Y","U","I","O","P"],
+            ["A","S","D","F","G","H","J","K","L"],
+            ["ENVIAR","Z","X","C","V","B","N","M","⌫"]];
+
+function buildKeyboard(){
+  const k=document.getElementById("keyboard"); k.innerHTML="";
+  KEYS.forEach(rowKeys=>{
+    const kr=document.createElement("div"); kr.className="krow";
+    rowKeys.forEach(key=>{
+      const btn=document.createElement("button");
+      btn.className="key"+(key.length>1?" wide":"");
+      btn.textContent=key; btn.dataset.key=key;
+      btn.onclick=()=>press(key);
+      kr.appendChild(btn);
+    });
+    k.appendChild(kr);
+  });
+}
+
+function press(key){
+  if(gameOver) return;
+  if(key==="ENVIAR") return submit();
+  if(key==="⌫"){ current=current.slice(0,-1); render(); return; }
+  if(/^[A-Z]$/.test(key) && current.length<5){ current+=key; render(); }
+}
+
+function render(){
+  const r=attempts.length;
+  for(let c=0;c<5;c++){
+    const t=document.getElementById(`t${r}-${c}`);
+    if(!t) continue;
+    if(c<current.length){ t.textContent=current[c]; t.classList.add("filled"); }
+    else { t.textContent=""; t.classList.remove("filled"); }
+  }
+}
+
+function toast(msg){
+  const el=document.getElementById("toast");
+  el.textContent=msg; el.classList.add("show");
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove("show"),1600);
+}
+
+function evaluate(guess){
+  const res=Array(5).fill("ausente");
+  const ans=answer.split("");
+  const used=Array(5).fill(false);
+  for(let i=0;i<5;i++){ if(guess[i]===ans[i]){ res[i]="certo"; used[i]=true; } }
+  for(let i=0;i<5;i++){
+    if(res[i]==="certo") continue;
+    for(let j=0;j<5;j++){
+      if(!used[j] && guess[i]===ans[j]){ res[i]="posicao"; used[j]=true; break; }
+    }
+  }
+  return res;
+}
+
+function submit(){
+  if(current.length<5){ shake(); toast("Faltam letras"); return; }
+  const guess=norm(current);
+  if(!VALIDAS.has(guess)){ shake(); toast("Palavra não reconhecida"); return; }
+  const r=attempts.length;
+  const res=evaluate(guess);
+
+  // animação flip + cores
+  for(let c=0;c<5;c++){
+    const t=document.getElementById(`t${r}-${c}`);
+    setTimeout(()=>{
+      t.classList.add("flip");
+      setTimeout(()=>{ t.classList.add(res[c]); },240);
+    }, c*180);
+  }
+  // teclado
+  setTimeout(()=>paintKeys(guess,res), 5*180);
+
+  attempts.push(guess);
+  current="";
+
+  if(guess===answer){
+    gameOver=true;
+    streak += 1;
+    if(streak > best) best = streak;
+    const base = PONTOS_TENTATIVA[r] || 10;
+    const mult = 1 + 0.1 * (streak - 1);        // +10% por acerto encadeado
+    const ganho = Math.round(base * mult);
+    score += ganho;
+    const msgs=["Genial!","Brilhante!","Mandou bem!","Boa!","Ufa!","No limite!"];
+    setTimeout(()=>{
+      const seqTxt = streak >= 2 ? ` · ${streak} seguidas (x${mult.toFixed(1)})` : "";
+      toast(`${msgs[r]||"Acertou!"} +${ganho} pts${seqTxt}`);
+      updateScorebar(true);
+    }, 5*180+300);
+    setTimeout(()=>{ if(gameOver) newGame(); }, 5*180+2200);
+  } else if(attempts.length===6){
+    gameOver=true;
+    const tinhaSeq = streak;
+    const pontosDaRodada = score;
+    streak = 0;
+    setTimeout(()=>{
+      toast(`A palavra era ${answer}`);
+      updateScorebar(true);
+    }, 5*180+300);
+    if(tinhaSeq >= 1){
+      // tinha uma sequência em andamento → fim de jogo, abre ranking
+      setTimeout(()=>endRun(tinhaSeq, pontosDaRodada), 5*180+1400);
+    } else {
+      setTimeout(()=>{ if(gameOver) newGame(); }, 5*180+2400);
+    }
+  }
+}
+
+function paintKeys(guess,res){
+  const rank={ausente:0,posicao:1,certo:2};
+  for(let i=0;i<5;i++){
+    const btn=document.querySelector(`.key[data-key="${guess[i]}"]`);
+    if(!btn) continue;
+    const cur=["ausente","posicao","certo"].find(c=>btn.classList.contains(c));
+    if(!cur || rank[res[i]]>rank[cur]){
+      btn.classList.remove("ausente","posicao","certo");
+      btn.classList.add(res[i]);
+    }
+  }
+}
+
+function shake(){
+  const row=document.getElementById("row"+attempts.length);
+  if(row){ row.classList.add("shake"); setTimeout(()=>row.classList.remove("shake"),400); }
+}
+
+// ---- Ranking (placar compartilhado via Supabase, com fallback local) ----
+let ranking = [];          // {nome, pontos, seq}
+let pendingRun = null;     // {seq, pontos} aguardando salvar
+
+const SB_URL = (window.SUPABASE_URL || "").replace(/\/+$/, "");
+const SB_KEY = window.SUPABASE_KEY || "";
+const SB_OK  = !!(SB_URL && SB_KEY);
+const LS_KEY = "termo_ranking";
+
+function rankingLocal(){ try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch(e){ return []; } }
+function salvarLocal(arr){ try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch(e){} }
+
+async function carregarRanking(){
+  if(SB_OK){
+    try {
+      const r = await fetch(SB_URL + "/rest/v1/ranking?select=nome,pontos,seq&order=pontos.desc&limit=50", {
+        headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
+      });
+      if(r.ok){ ranking = await r.json(); return; }
+    } catch(e){ /* usa fallback local */ }
+  }
+  ranking = rankingLocal();
+}
+
+async function enviarScore(entry){
+  if(SB_OK){
+    try {
+      const r = await fetch(SB_URL + "/rest/v1/ranking", {
+        method: "POST",
+        headers: {
+          apikey: SB_KEY, Authorization: "Bearer " + SB_KEY,
+          "Content-Type": "application/json", Prefer: "return=minimal"
+        },
+        body: JSON.stringify(entry)
+      });
+      if(r.ok){ await carregarRanking(); return; }
+    } catch(e){ /* usa fallback local */ }
+  }
+  const arr = rankingLocal();
+  arr.push(entry);
+  arr.sort((a,b)=>b.pontos-a.pontos);
+  salvarLocal(arr);
+  ranking = arr;
+}
+
+function endRun(seq, pontos){
+  pendingRun = { seq, pontos };
+  document.getElementById("modalTitle").textContent = "Fim da sequência!";
+  document.getElementById("modalSub").innerHTML =
+    `Você acertou <span class="big">${seq}</span> ` +
+    `${seq===1?"palavra":"palavras"} seguidas e somou ` +
+    `<span class="big">${pontos}</span> pontos.`;
+  document.getElementById("nameStage").style.display = "";
+  document.getElementById("nameInput").value = "";
+  // restaura botões ao estado padrão
+  document.getElementById("saveExit").style.display = "";
+  document.getElementById("playAgain").textContent = "Jogar de novo";
+  renderRank();
+  document.getElementById("overlay").classList.add("show");
+  setTimeout(()=>document.getElementById("nameInput").focus(), 120);
+  carregarRanking().then(()=>renderRank());   // atualiza com o placar compartilhado
+}
+
+function renderRank(highlightIdx){
+  const ol = document.getElementById("rankList");
+  if(ranking.length===0){
+    ol.innerHTML = `<li class="empty">Nenhuma pontuação ainda — seja o primeiro!</li>`;
+    return;
+  }
+  const top = [...ranking].sort((a,b)=>b.pontos-a.pontos).slice(0,5);
+  ol.innerHTML = top.map((e,i)=>{
+    const me = (i===highlightIdx) ? " me" : "";
+    return `<li class="${me.trim()}">
+      <span class="pos">${i+1}</span>
+      <span class="who">${e.nome}</span>
+      <span class="pts">${e.pontos}</span>
+    </li>`;
+  }).join("");
+}
+
+async function saveScore(){
+  if(!pendingRun) return;
+  let nome = (document.getElementById("nameInput").value || "").trim();
+  if(!nome) nome = "Anônimo";
+  nome = nome.slice(0,12).toUpperCase();
+  const entry = { nome, pontos: pendingRun.pontos, seq: pendingRun.seq };
+  pendingRun = null;
+  document.getElementById("nameStage").style.display = "none";
+  await enviarScore(entry);
+  // destaca a entrada recém-salva
+  const ordered = [...ranking].sort((a,b)=>b.pontos-a.pontos);
+  const idx = ordered.findIndex(e => e.nome===entry.nome && e.pontos===entry.pontos && e.seq===entry.seq);
+  renderRank(idx>=0 && idx<5 ? idx : -1);
+}
+
+function startNewRun(){
+  // recomeça pontuação e sequência do zero para a próxima "corrida"
+  score = 0; streak = 0;
+  pendingRun = null;
+  document.getElementById("overlay").classList.remove("show");
+  newGame();
+}
+
+document.getElementById("saveScore").onclick = saveScore;
+document.getElementById("nameInput").addEventListener("keydown", e=>{
+  e.stopPropagation();
+  if(e.key==="Enter") saveScore();
+});
+document.getElementById("playAgain").onclick = async ()=>{
+  if(pendingRun) await saveScore();   // salva automaticamente se esqueceu
+  startNewRun();
+};
+document.getElementById("saveExit").onclick = async ()=>{
+  if(pendingRun) await saveScore();   // garante que a pontuação entrou no ranking
+  // tela de despedida: mostra o ranking final, sem nova partida
+  document.getElementById("modalTitle").textContent = "Pontuação salva!";
+  document.getElementById("modalSub").innerHTML =
+    "Seu resultado entrou no ranking. Toque em <b>↻</b> no topo quando quiser começar uma nova sequência.";
+  document.getElementById("nameStage").style.display = "none";
+  // some o botão sair, mantém só "Jogar de novo"
+  document.getElementById("saveExit").style.display = "none";
+  document.getElementById("playAgain").textContent = "Começar nova sequência";
+  renderRank();
+};
+
+// teclado físico
+window.addEventListener("keydown",e=>{
+  if(document.getElementById("overlay").classList.contains("show")) return;
+  if(e.key==="Enter") press("ENVIAR");
+  else if(e.key==="Backspace") press("⌫");
+  else { const k=norm(e.key); if(/^[A-Z]$/.test(k)&&k.length===1) press(k); }
+});
+
+document.getElementById("reset").onclick=()=>{ newGame(); toast("Nova palavra!"); };
+
+// Inicialização: carrega os bancos de palavras e o ranking antes de jogar
+(async function init(){
+  try {
+    await carregarBancos();
+  } catch(e){
+    console.error(e);
+    toast("Erro ao carregar as palavras");
+    return;
+  }
+  carregarRanking();   // placar carrega em paralelo, sem travar o jogo
+  newGame();
+})();
+</script>
+</body>
+</html>
