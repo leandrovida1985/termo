@@ -188,12 +188,14 @@
   @media (prefers-reduced-motion: reduce) {
     .tile.flip, .row.shake, .tile.filled { animation: none; }
   }
+  header p a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  #loginMsg { min-height: 16px; margin: 6px 0 0; color: var(--accent); font-size: 13px; }
 </style>
 </head>
 <body>
   <header>
     <h1>TER<b>MO</b></h1>
-    <p>palavra do dia, sua vez</p>
+    <p id="subtitle">palavra do dia, sua vez</p>
     <button class="reset" id="reset" title="Nova palavra">↻</button>
   </header>
 
@@ -223,36 +225,42 @@
     <div class="modal">
       <h2 id="modalTitle">Fim da sequência</h2>
       <p class="sub" id="modalSub"></p>
-      <div id="nameStage">
-        <div class="namerow">
-          <input id="nameInput" maxlength="12" placeholder="Seu nome" autocomplete="off">
-          <button class="btn" id="saveScore">Salvar</button>
-        </div>
-      </div>
       <ul class="rank" id="rankList"></ul>
       <button class="btn ghost" id="playAgain">Jogar de novo</button>
-      <button class="btn ghost" id="saveExit">Salvar e sair</button>
+      <button class="btn ghost" id="trocarBtn">Trocar jogador</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="loginOverlay">
+    <div class="modal">
+      <h2>Entrar</h2>
+      <p class="sub">Digite seu nome e um PIN de 4 dígitos para competir em família. Na primeira vez, criamos seu perfil.</p>
+      <div class="namerow">
+        <input id="loginNome" maxlength="12" placeholder="Seu nome" autocomplete="off">
+      </div>
+      <div class="namerow">
+        <input id="loginPin" maxlength="4" inputmode="numeric" placeholder="PIN (4 dígitos)" autocomplete="off">
+        <button class="btn" id="loginBtn">Entrar</button>
+      </div>
+      <p class="sub" id="loginMsg"></p>
     </div>
   </div>
 
 <script src="config.js"></script>
 <script>
-// ---- Banco de palavras (5 letras, sem repetir acento; comparação ignora acentos) ----
-// Bancos carregados de arquivos externos (respostas.txt e palavras.txt).
-// WORDS = respostas sorteáveis | VALIDAS = palavras aceitas como chute.
-let WORDS = [];
+// ---- Banco de palavras (5 letras, sem acento; comparação ignora acentos) ----
+// VALIDAS = todas as palavras aceitas como chute (de palavras.txt).
+// WORDS   = respostas sorteáveis = todas as válidas, menos os palavrões abaixo.
 let VALIDAS = new Set();
+let WORDS = [];
+const PALAVROES = new Set(["MERDA","PORRA","FODER","BUNDA","CUZAO","VADIA","PUTAS","PUTAO","CAGAR","TESAO","PENIS","CONAS","TROXA","XINGA"]);
 
 async function carregarBancos(){
-  const pega = async (arq) => {
-    const r = await fetch(arq, { cache: "no-store" });
-    if(!r.ok) throw new Error("Falha ao carregar " + arq + " (" + r.status + ")");
-    const txt = await r.text();
-    return txt.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s.length === 5);
-  };
-  const [respostas, validacao] = await Promise.all([ pega("respostas.txt"), pega("palavras.txt") ]);
-  WORDS = [...new Set(respostas)];
-  VALIDAS = new Set([...validacao, ...WORDS]);
+  const r = await fetch("palavras.txt", { cache: "no-store" });
+  if(!r.ok) throw new Error("Falha ao carregar palavras.txt (" + r.status + ")");
+  const lista = (await r.text()).split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s.length === 5);
+  VALIDAS = new Set(lista);
+  WORDS = lista.filter(w => !PALAVROES.has(w));
 }
 
 const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
@@ -276,7 +284,17 @@ function updateScorebar(bump){
 }
 
 function newGame() {
-  answer = norm(WORDS[Math.floor(Math.random()*WORDS.length)]);
+  let pool = WORDS;
+  if(jogador && jogador.vistas){
+    const restantes = WORDS.filter(w => !jogador.vistas.has(w));
+    if(restantes.length === 0){
+      jogador.vistas.clear();           // já viu todas → recomeça o ciclo
+      toast("Você já passou por todas as palavras! Recomeçando.");
+    } else {
+      pool = restantes;
+    }
+  }
+  answer = norm(pool[Math.floor(Math.random()*pool.length)]);
   attempts = [];
   current = "";
   gameOver = false;
@@ -383,6 +401,7 @@ function submit(){
     const mult = 1 + 0.1 * (streak - 1);        // +10% por acerto encadeado
     const ganho = Math.round(base * mult);
     score += ganho;
+    marcarConcluida();   // marca a palavra como vista e atualiza o recorde
     const msgs=["Genial!","Brilhante!","Mandou bem!","Boa!","Ufa!","No limite!"];
     setTimeout(()=>{
       const seqTxt = streak >= 2 ? ` · ${streak} seguidas (x${mult.toFixed(1)})` : "";
@@ -394,6 +413,7 @@ function submit(){
     gameOver=true;
     const tinhaSeq = streak;
     const pontosDaRodada = score;
+    marcarConcluida();   // perdeu: marca a palavra como vista e atualiza o recorde
     streak = 0;
     setTimeout(()=>{
       toast(`A palavra era ${answer}`);
@@ -426,152 +446,197 @@ function shake(){
   if(row){ row.classList.add("shake"); setTimeout(()=>row.classList.remove("shake"),400); }
 }
 
-// ---- Ranking (placar compartilhado via Supabase, com fallback local) ----
-let ranking = [];          // {nome, pontos, seq}
-let pendingRun = null;     // {seq, pontos} aguardando salvar
-
+// ---- Login + placar de recordes (Supabase, com fallback local) ----
 const SB_URL = (window.SUPABASE_URL || "").replace(/\/+$/, "");
 const SB_KEY = window.SUPABASE_KEY || "";
 const SB_OK  = !!(SB_URL && SB_KEY);
-const LS_KEY = "termo_ranking";
 
-function rankingLocal(){ try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch(e){ return []; } }
-function salvarLocal(arr){ try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch(e){} }
+let jogador = null;   // { nome, pin, recorde, melhor_seq, vistas:Set }
+let placar  = [];     // [{ nome, recorde, melhor_seq }]
 
-async function carregarRanking(){
+async function rpc(fn, args){
+  const r = await fetch(SB_URL + "/rest/v1/rpc/" + fn, {
+    method: "POST",
+    headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(args)
+  });
+  if(!r.ok) throw new Error("Erro no servidor (" + r.status + ")");
+  return r.json();
+}
+
+// fallback local (quando não há Supabase configurado)
+function localDB(){ try { return JSON.parse(localStorage.getItem("termo_jogadores")) || {}; } catch(e){ return {}; } }
+function salvarLocalDB(db){ try { localStorage.setItem("termo_jogadores", JSON.stringify(db)); } catch(e){} }
+
+async function entrar(nome, pin){
+  nome = (nome||"").trim().toUpperCase().slice(0,12);
+  pin  = (pin||"").trim();
+  if(!nome) throw new Error("Digite seu nome.");
+  if(!/^\d{4}$/.test(pin)) throw new Error("O PIN deve ter 4 dígitos.");
+  if(SB_OK){
+    const rows = await rpc("entrar", { p_nome: nome, p_pin: pin });
+    const d = Array.isArray(rows) ? rows[0] : rows;
+    if(!d) throw new Error("Não foi possível entrar.");
+    if(d.ok === false) throw new Error("PIN incorreto para esse nome.");
+    return { nome, pin, recorde: d.recorde||0, melhor_seq: d.melhor_seq||0, vistas: new Set(d.vistas||[]) };
+  }
+  const db = localDB();
+  if(db[nome]){ if(db[nome].pin !== pin) throw new Error("PIN incorreto para esse nome."); }
+  else { db[nome] = { pin, recorde:0, melhor_seq:0, vistas:[] }; salvarLocalDB(db); }
+  const j = db[nome];
+  return { nome, pin, recorde:j.recorde, melhor_seq:j.melhor_seq, vistas:new Set(j.vistas) };
+}
+
+async function registrarResultado(palavra, pontos, seq){
+  if(!jogador) return;
   if(SB_OK){
     try {
-      const r = await fetch(SB_URL + "/rest/v1/ranking?select=nome,pontos,seq&order=pontos.desc&limit=50", {
+      const rows = await rpc("registrar", { p_nome: jogador.nome, p_pin: jogador.pin, p_pontos: pontos, p_seq: seq, p_palavra: palavra });
+      const d = Array.isArray(rows) ? rows[0] : rows;
+      if(d){ jogador.recorde = d.recorde; jogador.melhor_seq = d.melhor_seq; }
+      return;
+    } catch(e){ console.error(e); return; }
+  }
+  const db = localDB();
+  const j = db[jogador.nome] || { pin: jogador.pin, recorde:0, melhor_seq:0, vistas:[] };
+  j.recorde = Math.max(j.recorde||0, pontos);
+  j.melhor_seq = Math.max(j.melhor_seq||0, seq);
+  if(!j.vistas.includes(palavra)) j.vistas.push(palavra);
+  db[jogador.nome] = j; salvarLocalDB(db);
+  jogador.recorde = j.recorde; jogador.melhor_seq = j.melhor_seq;
+}
+
+function marcarConcluida(){
+  if(!jogador) return;
+  jogador.vistas.add(answer);                 // não repete essa palavra p/ este jogador
+  registrarResultado(answer, score, best);    // atualiza recorde/sequência no servidor
+}
+
+async function carregarPlacar(){
+  if(SB_OK){
+    try {
+      const r = await fetch(SB_URL + "/rest/v1/placar?select=nome,recorde,melhor_seq&order=recorde.desc&limit=50", {
         headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
       });
-      if(r.ok){ ranking = await r.json(); return; }
-    } catch(e){ /* usa fallback local */ }
+      if(r.ok){ placar = await r.json(); return; }
+    } catch(e){ /* fallback */ }
   }
-  ranking = rankingLocal();
+  const db = localDB();
+  placar = Object.keys(db).map(n => ({ nome:n, recorde:db[n].recorde||0, melhor_seq:db[n].melhor_seq||0 }))
+                          .sort((a,b)=>b.recorde-a.recorde);
 }
 
-async function enviarScore(entry){
-  if(SB_OK){
-    try {
-      const r = await fetch(SB_URL + "/rest/v1/ranking", {
-        method: "POST",
-        headers: {
-          apikey: SB_KEY, Authorization: "Bearer " + SB_KEY,
-          "Content-Type": "application/json", Prefer: "return=minimal"
-        },
-        body: JSON.stringify(entry)
-      });
-      if(r.ok){ await carregarRanking(); return; }
-    } catch(e){ /* usa fallback local */ }
-  }
-  const arr = rankingLocal();
-  arr.push(entry);
-  arr.sort((a,b)=>b.pontos-a.pontos);
-  salvarLocal(arr);
-  ranking = arr;
-}
-
-function endRun(seq, pontos){
-  pendingRun = { seq, pontos };
-  document.getElementById("modalTitle").textContent = "Fim da sequência!";
-  document.getElementById("modalSub").innerHTML =
-    `Você acertou <span class="big">${seq}</span> ` +
-    `${seq===1?"palavra":"palavras"} seguidas e somou ` +
-    `<span class="big">${pontos}</span> pontos.`;
-  document.getElementById("nameStage").style.display = "";
-  document.getElementById("nameInput").value = "";
-  // restaura botões ao estado padrão
-  document.getElementById("saveExit").style.display = "";
-  document.getElementById("playAgain").textContent = "Jogar de novo";
-  renderRank();
-  document.getElementById("overlay").classList.add("show");
-  setTimeout(()=>document.getElementById("nameInput").focus(), 120);
-  carregarRanking().then(()=>renderRank());   // atualiza com o placar compartilhado
-}
-
-function renderRank(highlightIdx){
+function renderPlacar(){
   const ol = document.getElementById("rankList");
-  if(ranking.length===0){
-    ol.innerHTML = `<li class="empty">Nenhuma pontuação ainda — seja o primeiro!</li>`;
+  if(!placar || placar.length===0){
+    ol.innerHTML = `<li class="empty">Ninguém marcou pontos ainda — seja o primeiro!</li>`;
     return;
   }
-  const top = [...ranking].sort((a,b)=>b.pontos-a.pontos).slice(0,5);
+  const top = [...placar].sort((a,b)=>b.recorde-a.recorde).slice(0,5);
   ol.innerHTML = top.map((e,i)=>{
-    const me = (i===highlightIdx) ? " me" : "";
+    const me = (jogador && e.nome===jogador.nome) ? " me" : "";
     return `<li class="${me.trim()}">
       <span class="pos">${i+1}</span>
       <span class="who">${e.nome}</span>
-      <span class="pts">${e.pontos}</span>
+      <span class="pts">${e.recorde}</span>
     </li>`;
   }).join("");
 }
 
-async function saveScore(){
-  if(!pendingRun) return;
-  let nome = (document.getElementById("nameInput").value || "").trim();
-  if(!nome) nome = "Anônimo";
-  nome = nome.slice(0,12).toUpperCase();
-  const entry = { nome, pontos: pendingRun.pontos, seq: pendingRun.seq };
-  pendingRun = null;
-  document.getElementById("nameStage").style.display = "none";
-  await enviarScore(entry);
-  // destaca a entrada recém-salva
-  const ordered = [...ranking].sort((a,b)=>b.pontos-a.pontos);
-  const idx = ordered.findIndex(e => e.nome===entry.nome && e.pontos===entry.pontos && e.seq===entry.seq);
-  renderRank(idx>=0 && idx<5 ? idx : -1);
+function endRun(seq, pontos){
+  document.getElementById("modalTitle").textContent = "Fim da sequência!";
+  document.getElementById("modalSub").innerHTML =
+    `Você acertou <span class="big">${seq}</span> ${seq===1?"palavra":"palavras"} seguidas e somou ` +
+    `<span class="big">${pontos}</span> pontos.` +
+    (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts.` : "");
+  renderPlacar();
+  document.getElementById("overlay").classList.add("show");
+  carregarPlacar().then(renderPlacar);
 }
 
 function startNewRun(){
-  // recomeça pontuação e sequência do zero para a próxima "corrida"
   score = 0; streak = 0;
-  pendingRun = null;
   document.getElementById("overlay").classList.remove("show");
   newGame();
 }
 
-document.getElementById("saveScore").onclick = saveScore;
-document.getElementById("nameInput").addEventListener("keydown", e=>{
+// ----- Login (tela de entrada) -----
+const LS_SESSION = "termo_sessao";
+
+function atualizarHeader(){
+  const sub = document.getElementById("subtitle");
+  if(jogador){
+    sub.innerHTML = `Jogando como <b>${jogador.nome}</b> · <a id="trocar">trocar</a>`;
+    document.getElementById("trocar").onclick = logout;
+  } else {
+    sub.textContent = "palavra do dia, sua vez";
+  }
+}
+function mostrarLogin(){
+  document.getElementById("loginMsg").textContent = "";
+  document.getElementById("loginPin").value = "";
+  document.getElementById("loginOverlay").classList.add("show");
+  setTimeout(()=>document.getElementById("loginNome").focus(), 100);
+}
+async function fazerLogin(nome, pin){
+  const j = await entrar(nome, pin);
+  jogador = j;
+  try { localStorage.setItem(LS_SESSION, JSON.stringify({ nome:j.nome, pin:j.pin })); } catch(e){}
+  document.getElementById("loginOverlay").classList.remove("show");
+  atualizarHeader();
+  carregarPlacar();
+}
+function logout(){
+  jogador = null;
+  try { localStorage.removeItem(LS_SESSION); } catch(e){}
+  atualizarHeader();
+  document.getElementById("overlay").classList.remove("show");
+  mostrarLogin();
+}
+
+document.getElementById("loginBtn").onclick = async ()=>{
+  const msg = document.getElementById("loginMsg");
+  msg.textContent = "Entrando...";
+  try {
+    await fazerLogin(document.getElementById("loginNome").value, document.getElementById("loginPin").value);
+    newGame();
+  } catch(e){ msg.textContent = e.message || "Erro ao entrar."; }
+};
+document.getElementById("loginNome").addEventListener("keydown", e=>{ e.stopPropagation(); });
+document.getElementById("loginPin").addEventListener("keydown", e=>{
   e.stopPropagation();
-  if(e.key==="Enter") saveScore();
+  if(e.key==="Enter") document.getElementById("loginBtn").click();
 });
-document.getElementById("playAgain").onclick = async ()=>{
-  if(pendingRun) await saveScore();   // salva automaticamente se esqueceu
-  startNewRun();
-};
-document.getElementById("saveExit").onclick = async ()=>{
-  if(pendingRun) await saveScore();   // garante que a pontuação entrou no ranking
-  // tela de despedida: mostra o ranking final, sem nova partida
-  document.getElementById("modalTitle").textContent = "Pontuação salva!";
-  document.getElementById("modalSub").innerHTML =
-    "Seu resultado entrou no ranking. Toque em <b>↻</b> no topo quando quiser começar uma nova sequência.";
-  document.getElementById("nameStage").style.display = "none";
-  // some o botão sair, mantém só "Jogar de novo"
-  document.getElementById("saveExit").style.display = "none";
-  document.getElementById("playAgain").textContent = "Começar nova sequência";
-  renderRank();
-};
+
+document.getElementById("playAgain").onclick = ()=> startNewRun();
+document.getElementById("trocarBtn").onclick = logout;
 
 // teclado físico
 window.addEventListener("keydown",e=>{
   if(document.getElementById("overlay").classList.contains("show")) return;
+  if(document.getElementById("loginOverlay").classList.contains("show")) return;
   if(e.key==="Enter") press("ENVIAR");
   else if(e.key==="Backspace") press("⌫");
   else { const k=norm(e.key); if(/^[A-Z]$/.test(k)&&k.length===1) press(k); }
 });
 
-document.getElementById("reset").onclick=()=>{ newGame(); toast("Nova palavra!"); };
+document.getElementById("reset").onclick=()=>{
+  if(!jogador){ mostrarLogin(); return; }
+  newGame(); toast("Nova palavra!");
+};
 
-// Inicialização: carrega os bancos de palavras e o ranking antes de jogar
+// Inicialização: carrega as palavras, tenta a sessão salva e pede login se preciso
 (async function init(){
-  try {
-    await carregarBancos();
-  } catch(e){
-    console.error(e);
-    toast("Erro ao carregar as palavras");
-    return;
+  try { await carregarBancos(); }
+  catch(e){ console.error(e); toast("Erro ao carregar as palavras"); return; }
+  atualizarHeader();
+  let sess = null;
+  try { sess = JSON.parse(localStorage.getItem(LS_SESSION)); } catch(e){}
+  if(sess && sess.nome && sess.pin){
+    try { await fazerLogin(sess.nome, sess.pin); newGame(); return; }
+    catch(e){ /* sessão inválida → pede login */ }
   }
-  carregarRanking();   // placar carrega em paralelo, sem travar o jogo
-  newGame();
+  mostrarLogin();
 })();
 </script>
 </body>
