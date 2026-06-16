@@ -627,7 +627,7 @@ function atualizarHeader(){
   const sub = document.getElementById("subtitle");
   if(jogador){
     sub.innerHTML = `Jogando como <b>${jogador.nome}</b> · <a id="trocar">trocar</a>`;
-    document.getElementById("trocar").onclick = logout;
+    document.getElementById("trocar").onclick = trocarJogador;
   } else {
     sub.innerHTML = `Jogando como <b>convidado</b> · <a id="entrarLink">entrar</a>`;
     document.getElementById("entrarLink").onclick = mostrarLogin;
@@ -647,10 +647,8 @@ async function fazerLogin(nome, pin){
   atualizarHeader();
   carregarPlacar();
 }
-function logout(){
-  jogador = null;
-  try { localStorage.removeItem(LS_SESSION); } catch(e){}
-  atualizarHeader();
+function trocarJogador(){
+  // mostra o login sem deslogar: se fechar (X) sem entrar, continua o mesmo jogador
   document.getElementById("overlay").classList.remove("show");
   mostrarLogin();
 }
@@ -677,7 +675,7 @@ function fecharLogin(){
 document.getElementById("fecharLogin").onclick = fecharLogin;
 
 document.getElementById("playAgain").onclick = ()=> startNewRun();
-document.getElementById("trocarBtn").onclick = logout;
+document.getElementById("trocarBtn").onclick = trocarJogador;
 
 // teclado físico
 window.addEventListener("keydown",e=>{
