@@ -156,6 +156,7 @@
   }
   .overlay.show { display: flex; }
   .modal {
+    position: relative;
     background: var(--bg); border-radius: 16px;
     width: 100%; max-width: 360px;
     padding: 22px 20px; box-shadow: 0 14px 40px rgba(0,0,0,.35);
@@ -198,6 +199,18 @@
   }
   header p a { color: var(--accent); cursor: pointer; text-decoration: underline; }
   #loginMsg { min-height: 16px; margin: 6px 0 0; color: var(--accent); font-size: 13px; }
+  .rankbtn {
+    position: absolute; right: 46px; top: 13px;
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; line-height: 1;
+  }
+  .modalClose {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; cursor: pointer;
+    font-size: 24px; line-height: 1; color: var(--muted);
+    width: 32px; height: 32px;
+  }
+  .modalClose:active { transform: translateY(1px); }
 </style>
 </head>
 <body>
@@ -205,6 +218,7 @@
     <h1>TER<b>MO</b></h1>
     <p id="subtitle">palavra do dia, sua vez</p>
     <button class="sair" id="sairBtn" title="Encerrar e salvar o recorde">Sair</button>
+    <button class="rankbtn" id="rankBtn" title="Ver o placar">🏆</button>
     <button class="reset" id="reset" title="Nova palavra">↻</button>
   </header>
 
@@ -232,6 +246,7 @@
 
   <div class="overlay" id="overlay">
     <div class="modal">
+      <button class="modalClose" id="fecharModal" title="Fechar">×</button>
       <h2 id="modalTitle">Fim da sequência</h2>
       <p class="sub" id="modalSub"></p>
       <ul class="rank" id="rankList"></ul>
@@ -252,6 +267,16 @@
         <button class="btn" id="loginBtn">Entrar</button>
       </div>
       <p class="sub" id="loginMsg"></p>
+    </div>
+  </div>
+
+  <div class="overlay" id="placarOverlay">
+    <div class="modal">
+      <button class="modalClose" id="fecharPlacar" title="Fechar">×</button>
+      <h2>Placar</h2>
+      <p class="sub">Recordes da família</p>
+      <ul class="rank" id="rankListView"></ul>
+      <button class="btn ghost" id="fecharPlacar2">Fechar</button>
     </div>
   </div>
 
@@ -537,8 +562,8 @@ async function carregarPlacar(){
                           .sort((a,b)=>b.recorde-a.recorde);
 }
 
-function renderPlacar(){
-  const ol = document.getElementById("rankList");
+function renderPlacar(alvo){
+  const ol = document.getElementById(alvo || "rankList");
   if(!placar || placar.length===0){
     ol.innerHTML = `<li class="empty">Ninguém marcou pontos ainda — seja o primeiro!</li>`;
     return;
@@ -562,7 +587,7 @@ function endRun(seq, pontos){
     (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts.` : "");
   renderPlacar();
   document.getElementById("overlay").classList.add("show");
-  carregarPlacar().then(renderPlacar);
+  carregarPlacar().then(()=>renderPlacar());
 }
 
 function startNewRun(){
@@ -570,6 +595,28 @@ function startNewRun(){
   document.getElementById("overlay").classList.remove("show");
   newGame();
 }
+
+// Fechar (X) o modal de fim: encerra a sequência sem jogar de novo nem trocar de jogador
+function fecharModal(){
+  score = 0; streak = 0;
+  updateScorebar(false);
+  document.getElementById("overlay").classList.remove("show");
+}
+
+// Ver o placar a qualquer momento (sem afetar o jogo em andamento)
+async function verPlacar(){
+  if(!jogador) return;
+  renderPlacar("rankListView");
+  document.getElementById("placarOverlay").classList.add("show");
+  await carregarPlacar();
+  renderPlacar("rankListView");
+}
+function fecharPlacar(){ document.getElementById("placarOverlay").classList.remove("show"); }
+
+document.getElementById("fecharModal").onclick = fecharModal;
+document.getElementById("rankBtn").onclick = verPlacar;
+document.getElementById("fecharPlacar").onclick = fecharPlacar;
+document.getElementById("fecharPlacar2").onclick = fecharPlacar;
 
 // ----- Login (tela de entrada) -----
 const LS_SESSION = "termo_sessao";
@@ -626,6 +673,7 @@ document.getElementById("trocarBtn").onclick = logout;
 window.addEventListener("keydown",e=>{
   if(document.getElementById("overlay").classList.contains("show")) return;
   if(document.getElementById("loginOverlay").classList.contains("show")) return;
+  if(document.getElementById("placarOverlay").classList.contains("show")) return;
   if(e.key==="Enter") press("ENVIAR");
   else if(e.key==="Backspace") press("⌫");
   else { const k=norm(e.key); if(/^[A-Z]$/.test(k)&&k.length===1) press(k); }
