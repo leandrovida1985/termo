@@ -212,7 +212,7 @@
   }
   .modalClose:active { transform: translateY(1px); }
   .rank .pts small { color: var(--muted); font-weight: 700; font-size: 11px; }
-  .delPlayer { background:none; border:none; cursor:pointer; font-size:15px; color:var(--accent); padding:0 2px; margin-left:2px; }
+  .delPlayer { background:none; border:none; cursor:pointer; font-size:15px; color:var(--accent); padding:0 2px; margin-right:4px; }
 </style>
 </head>
 <body>
@@ -529,7 +529,8 @@ async function rpc(fn, args){
     body: JSON.stringify(args)
   });
   if(!r.ok) throw new Error("Erro no servidor (" + r.status + ")");
-  return r.json();
+  const txt = await r.text();          // funções "void" respondem sem corpo (204)
+  return txt ? JSON.parse(txt) : null;
 }
 
 // fallback local (quando não há Supabase configurado)
@@ -608,10 +609,10 @@ function renderPlacar(alvo){
     const del = (admin && e.nome!==jogador.nome)
       ? `<button class="delPlayer" data-nome="${e.nome}" title="Excluir jogador">🗑</button>` : "";
     return `<li class="${me.trim()}">
+      ${del}
       <span class="pos">${i+1}</span>
       <span class="who">${e.nome}</span>
       <span class="pts">${e.recorde} pts<small> · 🔥${e.melhor_seq||0}</small></span>
-      ${del}
     </li>`;
   }).join("");
   ol.querySelectorAll(".delPlayer").forEach(btn=>{
