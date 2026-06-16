@@ -211,6 +211,8 @@
     width: 32px; height: 32px;
   }
   .modalClose:active { transform: translateY(1px); }
+  .rank .pts small { color: var(--muted); font-weight: 700; font-size: 11px; }
+  .delPlayer { background:none; border:none; cursor:pointer; font-size:15px; color:var(--accent); padding:0 2px; margin-left:2px; }
 </style>
 </head>
 <body>
@@ -515,6 +517,7 @@ function shake(){
 const SB_URL = (window.SUPABASE_URL || "").replace(/\/+$/, "");
 const SB_KEY = window.SUPABASE_KEY || "";
 const SB_OK  = !!(SB_URL && SB_KEY);
+const ADMIN  = "LEANDRO VIDA";   // único perfil que pode excluir jogadores
 
 let jogador = null;   // { nome, pin, recorde, melhor_seq, vistas:Set }
 let placar  = [];     // [{ nome, recorde, melhor_seq }]
@@ -592,20 +595,43 @@ async function carregarPlacar(){
 }
 
 function renderPlacar(alvo){
-  const ol = document.getElementById(alvo || "rankList");
+  const id = alvo || "rankList";
+  const ol = document.getElementById(id);
   if(!placar || placar.length===0){
     ol.innerHTML = `<li class="empty">Ninguém marcou pontos ainda — seja o primeiro!</li>`;
     return;
   }
-  const top = [...placar].sort((a,b)=>b.recorde-a.recorde).slice(0,5);
+  const admin = jogador && jogador.nome === ADMIN;
+  const top = [...placar].sort((a,b)=>b.recorde-a.recorde).slice(0,10);
   ol.innerHTML = top.map((e,i)=>{
     const me = (jogador && e.nome===jogador.nome) ? " me" : "";
+    const del = (admin && e.nome!==jogador.nome)
+      ? `<button class="delPlayer" data-nome="${e.nome}" title="Excluir jogador">🗑</button>` : "";
     return `<li class="${me.trim()}">
       <span class="pos">${i+1}</span>
       <span class="who">${e.nome}</span>
-      <span class="pts">${e.recorde}</span>
+      <span class="pts">${e.recorde} pts<small> · 🔥${e.melhor_seq||0}</small></span>
+      ${del}
     </li>`;
   }).join("");
+  ol.querySelectorAll(".delPlayer").forEach(btn=>{
+    btn.onclick = ()=> excluirJogador(btn.dataset.nome, id);
+  });
+}
+
+async function excluirJogador(nome, alvoId){
+  if(!jogador || jogador.nome !== ADMIN) return;
+  if(!confirm("Excluir o jogador " + nome + "? Isso apaga o recorde dele.")) return;
+  try {
+    if(SB_OK){
+      await rpc("excluir", { p_alvo: nome, p_admin_nome: jogador.nome, p_admin_pin: jogador.pin });
+    } else {
+      const db = localDB(); delete db[nome]; salvarLocalDB(db);
+    }
+    await carregarPlacar();
+    renderPlacar(alvoId);
+    toast(nome + " foi removido");
+  } catch(e){ console.error(e); toast("Não foi possível excluir"); }
 }
 
 function endRun(seq, pontos){
@@ -613,7 +639,7 @@ function endRun(seq, pontos){
   document.getElementById("modalSub").innerHTML =
     `Você acertou <span class="big">${seq}</span> ${seq===1?"palavra":"palavras"} seguidas e somou ` +
     `<span class="big">${pontos}</span> pontos.` +
-    (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts.`
+    (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts · melhor sequência <span class="big">${jogador.melhor_seq}</span>.`
              : `<br>Entre com nome e PIN para salvar seu recorde no placar.`);
   renderPlacar();
   document.getElementById("overlay").classList.add("show");
