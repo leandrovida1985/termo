@@ -257,6 +257,7 @@
 
   <div class="overlay" id="loginOverlay">
     <div class="modal">
+      <button class="modalClose" id="fecharLogin" title="Fechar">×</button>
       <h2>Entrar</h2>
       <p class="sub">Digite seu nome e um PIN de 4 dígitos para competir em família. Na primeira vez, criamos seu perfil.</p>
       <div class="namerow">
@@ -513,11 +514,11 @@ async function entrar(nome, pin){
     const rows = await rpc("entrar", { p_nome: nome, p_pin: pin });
     const d = Array.isArray(rows) ? rows[0] : rows;
     if(!d) throw new Error("Não foi possível entrar.");
-    if(d.ok === false) throw new Error("PIN incorreto para esse nome.");
+    if(d.ok === false) throw new Error("Nome já em uso. Se for você, digite o PIN certo; se não, escolha outro nome.");
     return { nome, pin, recorde: d.recorde||0, melhor_seq: d.melhor_seq||0, vistas: new Set(d.vistas||[]) };
   }
   const db = localDB();
-  if(db[nome]){ if(db[nome].pin !== pin) throw new Error("PIN incorreto para esse nome."); }
+  if(db[nome]){ if(db[nome].pin !== pin) throw new Error("Nome já em uso. Se for você, digite o PIN certo; se não, escolha outro nome."); }
   else { db[nome] = { pin, recorde:0, melhor_seq:0, vistas:[] }; salvarLocalDB(db); }
   const j = db[nome];
   return { nome, pin, recorde:j.recorde, melhor_seq:j.melhor_seq, vistas:new Set(j.vistas) };
@@ -584,7 +585,8 @@ function endRun(seq, pontos){
   document.getElementById("modalSub").innerHTML =
     `Você acertou <span class="big">${seq}</span> ${seq===1?"palavra":"palavras"} seguidas e somou ` +
     `<span class="big">${pontos}</span> pontos.` +
-    (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts.` : "");
+    (jogador ? `<br>Seu recorde: <span class="big">${jogador.recorde}</span> pts.`
+             : `<br>Entre com nome e PIN para salvar seu recorde no placar.`);
   renderPlacar();
   document.getElementById("overlay").classList.add("show");
   carregarPlacar().then(()=>renderPlacar());
@@ -627,7 +629,8 @@ function atualizarHeader(){
     sub.innerHTML = `Jogando como <b>${jogador.nome}</b> · <a id="trocar">trocar</a>`;
     document.getElementById("trocar").onclick = logout;
   } else {
-    sub.textContent = "palavra do dia, sua vez";
+    sub.innerHTML = `Jogando como <b>convidado</b> · <a id="entrarLink">entrar</a>`;
+    document.getElementById("entrarLink").onclick = mostrarLogin;
   }
 }
 function mostrarLogin(){
@@ -665,6 +668,13 @@ document.getElementById("loginPin").addEventListener("keydown", e=>{
   e.stopPropagation();
   if(e.key==="Enter") document.getElementById("loginBtn").click();
 });
+
+// Fechar o login: joga como convidado (sem salvar recorde); dá pra entrar depois pelo topo
+function fecharLogin(){
+  document.getElementById("loginOverlay").classList.remove("show");
+  if(!jogador){ atualizarHeader(); newGame(); }
+}
+document.getElementById("fecharLogin").onclick = fecharLogin;
 
 document.getElementById("playAgain").onclick = ()=> startNewRun();
 document.getElementById("trocarBtn").onclick = logout;
