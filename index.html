@@ -268,6 +268,7 @@
         <button class="btn" id="loginBtn">Entrar</button>
       </div>
       <p class="sub" id="loginMsg"></p>
+      <button class="btn ghost" id="convidadoBtn">Jogar como convidado</button>
     </div>
   </div>
 
@@ -338,6 +339,31 @@ function newGame() {
   buildBoard();
   buildKeyboard();
   updateScorebar(false);
+  salvarPartida();
+}
+
+// ---- Continuar partida / convidado ----
+function chavePartida(){ return "termo_partida_" + (jogador ? jogador.nome : "@convidado"); }
+function salvarPartida(){
+  try { localStorage.setItem(chavePartida(), JSON.stringify({ answer, attempts, current, score, streak, best, gameOver })); } catch(e){}
+}
+function continuarOuNovo(){
+  let sv=null; try { sv=JSON.parse(localStorage.getItem(chavePartida())); } catch(e){}
+  if(sv && sv.answer && !sv.gameOver && Array.isArray(sv.attempts) && sv.attempts.length < 6){
+    answer=sv.answer; attempts=sv.attempts.slice(); current=sv.current||"";
+    score=sv.score||0; streak=sv.streak||0; best=sv.best||0; gameOver=false;
+    buildBoard(); buildKeyboard();
+    attempts.forEach((g,r)=>{
+      const res=evaluate(g);
+      for(let c=0;c<5;c++){ const t=document.getElementById(`t${r}-${c}`); t.textContent=g[c]; t.classList.add(res[c]); }
+      paintKeys(g,res);
+    });
+    render(); updateScorebar(false);
+    toast("Partida retomada");
+  } else {
+    score = 0; streak = 0; best = 0;   // jogador novo / convidado começa zerado
+    newGame();
+  }
 }
 
 function buildBoard() {
@@ -387,6 +413,7 @@ function render(){
     if(c<current.length){ t.textContent=current[c]; t.classList.add("filled"); }
     else { t.textContent=""; t.classList.remove("filled"); }
   }
+  salvarPartida();
 }
 
 function toast(msg){
@@ -463,6 +490,7 @@ function submit(){
       setTimeout(()=>{ if(gameOver) newGame(); }, 5*180+2400);
     }
   }
+  salvarPartida();
 }
 
 function paintKeys(guess,res){
@@ -658,7 +686,7 @@ document.getElementById("loginBtn").onclick = async ()=>{
   msg.textContent = "Entrando...";
   try {
     await fazerLogin(document.getElementById("loginNome").value, document.getElementById("loginPin").value);
-    newGame();
+    continuarOuNovo();
   } catch(e){ msg.textContent = e.message || "Erro ao entrar."; }
 };
 document.getElementById("loginNome").addEventListener("keydown", e=>{ e.stopPropagation(); });
@@ -667,12 +695,22 @@ document.getElementById("loginPin").addEventListener("keydown", e=>{
   if(e.key==="Enter") document.getElementById("loginBtn").click();
 });
 
-// Fechar o login: joga como convidado (sem salvar recorde); dá pra entrar depois pelo topo
+// Fechar (X): cancela. Se já havia um jogador, mantém a partida atual; senão entra como convidado.
 function fecharLogin(){
   document.getElementById("loginOverlay").classList.remove("show");
-  if(!jogador){ atualizarHeader(); newGame(); }
+  if(!jogador){ atualizarHeader(); continuarOuNovo(); }
 }
 document.getElementById("fecharLogin").onclick = fecharLogin;
+
+// Jogar como convidado: sai de qualquer login e começa uma partida nova (sem salvar recorde)
+function jogarConvidado(){
+  jogador = null;
+  try { localStorage.removeItem(LS_SESSION); } catch(e){}
+  document.getElementById("loginOverlay").classList.remove("show");
+  atualizarHeader();
+  continuarOuNovo();   // retoma a partida do convidado, ou começa zerada
+}
+document.getElementById("convidadoBtn").onclick = jogarConvidado;
 
 document.getElementById("playAgain").onclick = ()=> startNewRun();
 document.getElementById("trocarBtn").onclick = trocarJogador;
@@ -688,7 +726,6 @@ window.addEventListener("keydown",e=>{
 });
 
 document.getElementById("reset").onclick=()=>{
-  if(!jogador){ mostrarLogin(); return; }
   newGame(); toast("Nova palavra!");
 };
 
@@ -709,7 +746,7 @@ document.getElementById("sairBtn").onclick=()=>{
   let sess = null;
   try { sess = JSON.parse(localStorage.getItem(LS_SESSION)); } catch(e){}
   if(sess && sess.nome && sess.pin){
-    try { await fazerLogin(sess.nome, sess.pin); newGame(); return; }
+    try { await fazerLogin(sess.nome, sess.pin); continuarOuNovo(); return; }
     catch(e){ /* sessão inválida → pede login */ }
   }
   mostrarLogin();
