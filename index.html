@@ -213,6 +213,13 @@
   .modalClose:active { transform: translateY(1px); }
   .rank .pts small { color: var(--muted); font-weight: 700; font-size: 11px; }
   .delPlayer { background:none; border:none; cursor:pointer; font-size:15px; color:var(--accent); padding:0 2px; margin-right:4px; }
+  .helpbtn {
+    position: absolute; right: 46px; top: 13px;
+    background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1;
+  }
+  .ajudaTexto { text-align:left; font-size:13.5px; line-height:1.55; color:var(--ink); margin:0 0 14px; }
+  .ajudaTexto p { margin:0 0 10px; }
+  .ajudaTexto .leg { display:block; margin:2px 0; }
 </style>
 </head>
 <body>
@@ -221,6 +228,7 @@
     <p id="subtitle">palavra do dia, sua vez</p>
     <button class="sair" id="sairBtn" title="Encerrar e salvar o recorde">Sair</button>
     <button class="rankbtn" id="rankBtn" title="Ver o placar">🏆</button>
+    <button class="helpbtn" id="ajudaBtn" title="Como jogar">❓</button>
   </header>
 
   <div class="scorebar">
@@ -270,6 +278,26 @@
       </div>
       <p class="sub" id="loginMsg"></p>
       <button class="btn ghost" id="convidadoBtn">Jogar como convidado</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="ajudaOverlay">
+    <div class="modal">
+      <button class="modalClose" id="fecharAjudaX" title="Fechar">×</button>
+      <h2>Como jogar</h2>
+      <p class="sub">Descubra a palavra de 5 letras em até 6 tentativas.</p>
+      <div class="ajudaTexto">
+        <p>Digite uma palavra e toque em <b>ENVIAR</b>. As cores mostram o quanto você acertou:</p>
+        <p>
+          <span class="leg">🟩 <b>Verde</b>: letra certa, no lugar certo.</span>
+          <span class="leg">🟨 <b>Amarelo</b>: a letra existe, mas em outra posição.</span>
+          <span class="leg">⬜ <b>Cinza</b>: a letra não está na palavra.</span>
+        </p>
+        <p>Não precisa de acento — pode digitar as letras simples.</p>
+        <p>Cada acerto soma <b>pontos</b> e aumenta sua <b>sequência</b> 🔥 (acertos seguidos valem mais). Se errar a palavra nas 6 tentativas, a sequência zera e vem uma palavra nova.</p>
+        <p>Entre com <b>nome e PIN</b> para salvar seu recorde e disputar o <b>placar</b> 🏆 da família. Sua partida fica salva: dá pra continuar depois, em qualquer aparelho.</p>
+      </div>
+      <button class="btn ghost" id="fecharAjuda">Entendi</button>
     </div>
   </div>
 
@@ -685,6 +713,12 @@ document.getElementById("rankBtn").onclick = verPlacar;
 document.getElementById("fecharPlacar").onclick = fecharPlacar;
 document.getElementById("fecharPlacar2").onclick = fecharPlacar;
 
+function abrirAjuda(){ document.getElementById("ajudaOverlay").classList.add("show"); }
+function fecharAjuda(){ document.getElementById("ajudaOverlay").classList.remove("show"); }
+document.getElementById("ajudaBtn").onclick = abrirAjuda;
+document.getElementById("fecharAjuda").onclick = fecharAjuda;
+document.getElementById("fecharAjudaX").onclick = fecharAjuda;
+
 // ----- Login (tela de entrada) -----
 const LS_SESSION = "termo_sessao";
 
@@ -757,6 +791,7 @@ window.addEventListener("keydown",e=>{
   if(document.getElementById("overlay").classList.contains("show")) return;
   if(document.getElementById("loginOverlay").classList.contains("show")) return;
   if(document.getElementById("placarOverlay").classList.contains("show")) return;
+  if(document.getElementById("ajudaOverlay").classList.contains("show")) return;
   if(e.key==="Enter") press("ENVIAR");
   else if(e.key==="Backspace") press("⌫");
   else { const k=norm(e.key); if(/^[A-Z]$/.test(k)&&k.length===1) press(k); }
