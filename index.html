@@ -200,7 +200,7 @@
   header p a { color: var(--accent); cursor: pointer; text-decoration: underline; }
   #loginMsg { min-height: 16px; margin: 6px 0 0; color: var(--accent); font-size: 13px; }
   .rankbtn {
-    position: absolute; right: 46px; top: 13px;
+    position: absolute; right: 14px; top: 13px;
     background: none; border: none; cursor: pointer;
     font-size: 18px; line-height: 1;
   }
@@ -221,7 +221,6 @@
     <p id="subtitle">palavra do dia, sua vez</p>
     <button class="sair" id="sairBtn" title="Encerrar e salvar o recorde">Sair</button>
     <button class="rankbtn" id="rankBtn" title="Ver o placar">🏆</button>
-    <button class="reset" id="reset" title="Nova palavra">↻</button>
   </header>
 
   <div class="scorebar">
@@ -346,11 +345,22 @@ function newGame() {
 
 // ---- Continuar partida / convidado ----
 function chavePartida(){ return "termo_partida_" + (jogador ? jogador.nome : "@convidado"); }
+function estadoPartida(){ return { answer, attempts, current, score, streak, best, gameOver }; }
+let _syncTimer = null;
 function salvarPartida(){
-  try { localStorage.setItem(chavePartida(), JSON.stringify({ answer, attempts, current, score, streak, best, gameOver })); } catch(e){}
+  try { localStorage.setItem(chavePartida(), JSON.stringify(estadoPartida())); } catch(e){}
+  // sincroniza no Supabase (debounce) para continuar a partida em qualquer aparelho
+  if(jogador && SB_OK){
+    clearTimeout(_syncTimer);
+    const snap = estadoPartida();
+    _syncTimer = setTimeout(()=>{
+      rpc("salvar_partida", { p_nome: jogador.nome, p_pin: jogador.pin, p_partida: snap }).catch(()=>{});
+    }, 1200);
+  }
 }
 function continuarOuNovo(){
-  let sv=null; try { sv=JSON.parse(localStorage.getItem(chavePartida())); } catch(e){}
+  let sv = (jogador && jogador.partida) ? jogador.partida : null;   // partida da nuvem (segue entre aparelhos)
+  if(!sv){ try { sv=JSON.parse(localStorage.getItem(chavePartida())); } catch(e){} }
   if(sv && sv.answer && !sv.gameOver && Array.isArray(sv.attempts) && sv.attempts.length < 6){
     answer=sv.answer; attempts=sv.attempts.slice(); current=sv.current||"";
     score=sv.score||0; streak=sv.streak||0; best=sv.best||0; gameOver=false;
@@ -547,7 +557,7 @@ async function entrar(nome, pin){
     const d = Array.isArray(rows) ? rows[0] : rows;
     if(!d) throw new Error("Não foi possível entrar.");
     if(d.ok === false) throw new Error("Nome já em uso. Se for você, digite o PIN certo; se não, escolha outro nome.");
-    return { nome, pin, recorde: d.recorde||0, melhor_seq: d.melhor_seq||0, vistas: new Set(d.vistas||[]) };
+    return { nome, pin, recorde: d.recorde||0, melhor_seq: d.melhor_seq||0, vistas: new Set(d.vistas||[]), partida: d.partida || null };
   }
   const db = localDB();
   if(db[nome]){ if(db[nome].pin !== pin) throw new Error("Nome já em uso. Se for você, digite o PIN certo; se não, escolha outro nome."); }
@@ -752,9 +762,6 @@ window.addEventListener("keydown",e=>{
   else { const k=norm(e.key); if(/^[A-Z]$/.test(k)&&k.length===1) press(k); }
 });
 
-document.getElementById("reset").onclick=()=>{
-  newGame(); toast("Nova palavra!");
-};
 
 // Sair: encerra a sequência atual e mostra o placar (o recorde já foi salvo a cada acerto)
 document.getElementById("sairBtn").onclick=()=>{
