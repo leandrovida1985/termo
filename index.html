@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Termo</title>
+<meta name="description" content="Adivinhe a palavra de 5 letras e dispute o placar com a família. Joguinho de palavras grátis, em português.">
+<meta name="theme-color" content="#c2492f">
+<!-- Pré-visualização ao compartilhar (WhatsApp, redes sociais) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Termo · Jogo da Família">
+<meta property="og:description" content="Adivinhe a palavra de 5 letras e dispute o placar com a família!">
+<meta property="og:image" content="https://leandrovida1985.github.io/termo/capa.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://leandrovida1985.github.io/termo/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Termo · Jogo da Família">
+<meta name="twitter:description" content="Adivinhe a palavra de 5 letras e dispute o placar com a família!">
+<meta name="twitter:image" content="https://leandrovida1985.github.io/termo/capa.png">
 <style>
   :root {
     --bg: #faf6ef;
@@ -644,7 +658,7 @@ function renderPlacar(alvo){
   const top = [...placar].sort((a,b)=>b.recorde-a.recorde).slice(0,10);
   ol.innerHTML = top.map((e,i)=>{
     const me = (jogador && e.nome===jogador.nome) ? " me" : "";
-    const del = (admin && e.nome!==jogador.nome)
+    const del = admin
       ? `<button class="delPlayer" data-nome="${e.nome}" title="Excluir jogador">🗑</button>` : "";
     return `<li class="${me.trim()}">
       ${del}
@@ -667,9 +681,17 @@ async function excluirJogador(nome, alvoId){
     } else {
       const db = localDB(); delete db[nome]; salvarLocalDB(db);
     }
+    const eraEu = (nome === jogador.nome);
     await carregarPlacar();
     renderPlacar(alvoId);
     toast(nome + " foi removido");
+    if(eraEu){
+      jogador = null;
+      try { localStorage.removeItem(LS_SESSION); } catch(e){}
+      atualizarHeader();
+      document.getElementById("placarOverlay").classList.remove("show");
+      mostrarLogin();
+    }
   } catch(e){ console.error(e); toast("Não foi possível excluir"); }
 }
 
