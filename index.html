@@ -353,7 +353,7 @@ async function carregarBancos(){
 const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
 
 let answer, attempts, current, gameOver;
-let streak = 0, best = 0, score = 0;
+let streak = 0, best = 0, score = 0, recordePts = 0;
 
 // Pontos-base por tentativa do acerto (índice 0 = 1ª tentativa)
 const PONTOS_TENTATIVA = [100, 80, 60, 40, 25, 10];
@@ -361,7 +361,8 @@ const PONTOS_TENTATIVA = [100, 80, 60, 40, 25, 10];
 function updateScorebar(bump){
   const s = document.getElementById("streak");
   s.innerHTML = streak + (streak >= 3 ? ' <span class="fire">🔥</span>' : '');
-  document.getElementById("best").textContent = best;
+  recordePts = Math.max(recordePts, score);
+  document.getElementById("best").textContent = jogador ? Math.max(jogador.recorde || 0, score) : recordePts;
   document.getElementById("score").textContent = score;
   if(bump){
     [s, document.getElementById("score")].forEach(el=>{
@@ -421,7 +422,7 @@ function continuarOuNovo(){
     render(); updateScorebar(false);
     toast("Partida retomada");
   } else {
-    score = 0; streak = 0; best = 0;   // jogador novo / convidado começa zerado
+    score = 0; streak = 0; best = 0; recordePts = 0;   // jogador novo / convidado começa zerado
     newGame();
   }
 }
@@ -695,7 +696,7 @@ async function excluirJogador(nome, alvoId){
     if(eraEu){
       jogador = null;
       try { localStorage.removeItem(LS_SESSION); } catch(e){}
-      score = 0; streak = 0; best = 0;     // zera o placar do topo (Sequência/Recorde/Pontos)
+      score = 0; streak = 0; best = 0; recordePts = 0;     // zera o placar do topo (Sequência/Recorde/Pontos)
       updateScorebar(false);
       atualizarHeader();
       document.getElementById("placarOverlay").classList.remove("show");
