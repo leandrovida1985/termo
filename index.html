@@ -685,9 +685,12 @@ async function excluirJogador(nome, alvoId){
     await carregarPlacar();
     renderPlacar(alvoId);
     toast(nome + " foi removido");
+    try { localStorage.removeItem("termo_partida_" + nome); } catch(e){}  // apaga a partida salva do excluído
     if(eraEu){
       jogador = null;
       try { localStorage.removeItem(LS_SESSION); } catch(e){}
+      score = 0; streak = 0; best = 0;     // zera o placar do topo (Sequência/Recorde/Pontos)
+      updateScorebar(false);
       atualizarHeader();
       document.getElementById("placarOverlay").classList.remove("show");
       mostrarLogin();
